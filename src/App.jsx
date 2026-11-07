@@ -1,70 +1,223 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { supabase, signInWithGoogle, signOut, getSession } from "./supabase";
+import { supabase, signInWithGoogle, signOut } from "./supabase";
 
 const API = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
+const FREE_LIMIT = 6;
+const THEME_KEY = "clipai-theme";
 
-const S = {
-  page: { minHeight:"100vh",background:"#eceff3",color:"#0e1116",fontFamily:"'Hanken Grotesk',sans-serif",paddingBottom:"80px" },
-  nav: { position:"sticky",top:0,zIndex:100,background:"rgba(236,239,243,0.92)",backdropFilter:"blur(20px)",borderBottom:"1px solid #cfd5df",padding:"0 5%" },
-  navInner: { maxWidth:900,margin:"0 auto",height:60,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12 },
-  logo: { fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"1.2rem",display:"flex",alignItems:"center",gap:8 },
-  logoIcon: { width:30,height:30,borderRadius:7,background:"linear-gradient(135deg,#2b3cff,#2b3cff)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14 },
-  navRight: { display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" },
-  userAvatar: { width:28,height:28,borderRadius:"50%",border:"2px solid #2b3cff" },
-  userEmail: { fontSize:11,color:"#4a5262",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" },
-  signOutBtn: { fontSize:11,padding:"5px 12px",borderRadius:100,border:"1px solid #cfd5df",background:"transparent",color:"#4a5262",cursor:"pointer",fontFamily:"'Hanken Grotesk',sans-serif" },
-  ytBtn: (c) => ({ fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:100,cursor:"pointer",
-    background:c?"rgba(10,125,59,0.12)":"rgba(43,60,255,0.1)",color:c?"#0a7d3b":"#2b3cff",
-    border:c?"1px solid rgba(10,125,59,0.3)":"1px solid rgba(43,60,255,0.25)",transition:"all .2s" }),
-  ytChannel: { display:"flex",alignItems:"center",gap:6,background:"#e4e8ee",border:"1px solid #cfd5df",borderRadius:100,padding:"3px 10px 3px 4px" },
-  ytChannelImg: { width:20,height:20,borderRadius:"50%" },
-  ytChannelName: { fontSize:11,color:"#4a5262",maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" },
-  hero: { textAlign:"center",padding:"60px 5% 40px",maxWidth:760,margin:"0 auto" },
-  h1: { fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"clamp(2rem,6vw,3.5rem)",letterSpacing:"-0.03em",lineHeight:1.05,marginBottom:"1rem" },
-  gradText: { background:"linear-gradient(90deg,#2b3cff,#2b3cff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text" },
-  heroSub: { fontSize:16,color:"#4a5262",lineHeight:1.75,marginBottom:"2.5rem" },
-  card: { background:"#ffffff",border:"1px solid #cfd5df",borderRadius:16,padding:"2rem",maxWidth:720,margin:"0 auto" },
-  label: { fontSize:12,letterSpacing:"0.1em",fontWeight:600,color:"#4a5262",textTransform:"uppercase",display:"block",marginBottom:8 },
-  input: { width:"100%",background:"#f6f7f9",border:"1px solid #cfd5df",borderRadius:10,color:"#0e1116",fontSize:14,padding:"13px 16px",outline:"none",fontFamily:"'Hanken Grotesk',sans-serif",transition:"border-color .2s",boxSizing:"border-box" },
-  selectRow: { display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:20 },
-  select: { width:"100%",background:"#f6f7f9",border:"1px solid #cfd5df",borderRadius:10,color:"#0e1116",fontSize:14,padding:"13px 16px",outline:"none",fontFamily:"'Hanken Grotesk',sans-serif",cursor:"pointer",appearance:"none" },
-  btnPrimary: { display:"block",width:"100%",marginTop:24,background:"linear-gradient(135deg,#2b3cff,#2b3cff)",border:"none",borderRadius:10,color:"#fff",fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:700,fontSize:15,padding:"15px",cursor:"pointer",letterSpacing:"0.02em",transition:"opacity .2s" },
-  btnDisabled: { opacity:0.5,cursor:"not-allowed" },
-  clipLimitBar: { maxWidth:720,margin:"1rem auto 0",padding:"0.75rem 1.25rem",background:"rgba(43,60,255,0.06)",border:"1px solid rgba(43,60,255,0.15)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"space-between" },
-  progressWrap: { maxWidth:720,margin:"2rem auto",padding:"2rem",background:"#ffffff",border:"1px solid #cfd5df",borderRadius:16 },
-  progressBar: { height:4,background:"#cfd5df",borderRadius:100,margin:"1rem 0",overflow:"hidden" },
-  progressFill: { height:"100%",borderRadius:100,background:"linear-gradient(90deg,#2b3cff,#2b3cff)",transition:"width .4s ease" },
-  clipsSection: { maxWidth:720,margin:"2rem auto" },
-  clipsTitle: { fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"1.4rem",marginBottom:"1.25rem",display:"flex",alignItems:"center",gap:10 },
-  clipsGrid: { display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:14 },
-  clipCard: { background:"#ffffff",border:"1px solid #cfd5df",borderRadius:12,overflow:"hidden" },
-  clipVideo: { width:"100%",display:"block",background:"#000" },
-  clipInfo: { padding:"0.75rem 1rem" },
-  clipNum: { fontSize:11,color:"#2b3cff",fontWeight:700,letterSpacing:"0.08em",marginBottom:4 },
-  clipCaption: { fontSize:12,color:"#4a5262",lineHeight:1.5,marginBottom:8 },
-  clipBtnRow: { display:"flex",gap:6 },
-  clipBtn: { flex:1,textAlign:"center",background:"transparent",border:"1px solid #cfd5df",borderRadius:7,color:"#4a5262",fontSize:11,padding:"7px 4px",cursor:"pointer",textDecoration:"none",fontFamily:"'Hanken Grotesk',sans-serif",transition:"all .2s" },
-  clipUploadBtn: { flex:1,textAlign:"center",background:"rgba(43,60,255,0.07)",border:"1px solid rgba(43,60,255,0.25)",borderRadius:7,color:"#2b3cff",fontSize:11,padding:"7px 4px",cursor:"pointer",fontFamily:"'Hanken Grotesk',sans-serif" },
-  clipDeleteBtn: { background:"transparent",border:"1px solid #cfd5df",borderRadius:7,color:"#4a5262",fontSize:11,padding:"7px 8px",cursor:"pointer" },
-  errorBox: { maxWidth:720,margin:"2rem auto",background:"rgba(180,35,24,0.08)",border:"1px solid rgba(180,35,24,0.3)",borderRadius:12,padding:"1.25rem 1.5rem",color:"#b42318",fontSize:14,lineHeight:1.7 },
-  resetBtn: { display:"block",margin:"1rem auto 0",background:"transparent",border:"1px solid #cfd5df",borderRadius:8,color:"#4a5262",fontSize:13,padding:"10px 24px",cursor:"pointer",fontFamily:"'Hanken Grotesk',sans-serif" },
-  loginOverlay: { position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(8px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem" },
-  loginCard: { background:"#ffffff",border:"1px solid #cfd5df",borderRadius:20,padding:"2.5rem",maxWidth:400,width:"100%",textAlign:"center" },
-  loginTitle: { fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"1.5rem",marginBottom:"0.5rem" },
-  loginSub: { fontSize:14,color:"#4a5262",marginBottom:"2rem",lineHeight:1.6 },
-  googleBtn: { display:"flex",alignItems:"center",justifyContent:"center",gap:10,width:"100%",padding:"14px",background:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontFamily:"'Hanken Grotesk',sans-serif",fontWeight:600,fontSize:14,color:"#1a1a1a" },
-  overlay: { position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(6px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"1rem" },
-  modal: { background:"#ffffff",border:"1px solid #cfd5df",borderRadius:16,padding:"2rem",width:"100%",maxWidth:480 },
-  modalTitle: { fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:"1.15rem",marginBottom:"1.25rem",display:"flex",alignItems:"center",gap:8 },
-  modalLabel: { fontSize:11,letterSpacing:"0.1em",fontWeight:600,color:"#4a5262",textTransform:"uppercase",display:"block",marginBottom:6,marginTop:14 },
-  modalInput: { width:"100%",background:"#f6f7f9",border:"1px solid #cfd5df",borderRadius:8,color:"#0e1116",fontSize:13,padding:"10px 14px",outline:"none",fontFamily:"'Hanken Grotesk',sans-serif",boxSizing:"border-box",resize:"vertical" },
-  modalBtnRow: { display:"flex",gap:8,marginTop:20 },
-  modalCancelBtn: { flex:1,padding:"11px",borderRadius:8,cursor:"pointer",background:"transparent",border:"1px solid #cfd5df",color:"#4a5262",fontSize:13,fontFamily:"'Hanken Grotesk',sans-serif" },
-  modalUploadBtn: { flex:2,padding:"11px",borderRadius:8,cursor:"pointer",background:"linear-gradient(135deg,#2b3cff,#2b3cff)",border:"none",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"'Bricolage Grotesque',sans-serif" },
-  successMsg: { marginTop:12,padding:"10px 14px",borderRadius:8,background:"rgba(10,125,59,0.1)",border:"1px solid rgba(10,125,59,0.3)",color:"#0a7d3b",fontSize:12,lineHeight:1.6 },
-};
+/* ------------------------------------------------------------------ */
+/* Styles                                                              */
+/* ------------------------------------------------------------------ */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+.cx{
+  --bg:#f2efe9;--panel:#faf8f4;--panel2:#ebe7df;--line:#d9d4c9;
+  --ink:#1a1916;--mut:#6b665b;--on-ink:#faf8f4;
+  --acc:#c2410c;--on-acc:#ffffff;--accsoft:rgba(194,65,12,.10);
+  --ok:#2f6f3e;--bad:#b3261e;
+  --overlay:rgba(26,25,22,.5);
+  min-height:100vh;background:var(--bg);color:var(--ink);
+  font-family:'Instrument Sans',system-ui,sans-serif;font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.cx[data-theme="dark"]{
+  --bg:#141311;--panel:#1c1b18;--panel2:#262420;--line:#34312b;
+  --ink:#f1eee6;--mut:#9a9486;--on-ink:#141311;
+  --acc:#f08a4b;--on-acc:#1a0e05;--accsoft:rgba(240,138,75,.14);
+  --ok:#7cc48c;--bad:#f2877e;
+  --overlay:rgba(0,0,0,.65);
+}
+.cx *{box-sizing:border-box}
+.cx button,.cx input,.cx textarea{font-family:inherit;font-size:inherit}
+.cx h1,.cx h2,.cx h3,.cx p{margin:0}
+.cx :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;transition:background .12s,border-color .12s}
+.btn:hover:not(:disabled){background:var(--panel2);border-color:var(--mut)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.btn.pri:hover:not(:disabled){background:var(--acc);filter:brightness(.93)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--on-ink)}
+.btn.dark:hover:not(:disabled){background:var(--ink);filter:brightness(1.15)}
+.btn.del{color:var(--bad)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.full{width:100%}
+.btn.sq{width:40px;padding:0}
+.btn svg{width:18px;height:18px;flex:none}
+
+/* Header */
+.top{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+.top-in{max-width:960px;margin:0 auto;height:58px;padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.02em}
+.mark{width:20px;height:20px;border-radius:5px;background:linear-gradient(135deg,var(--ink) 50%,var(--acc) 50%)}
+.top-r{display:flex;align-items:center;gap:8px;position:relative}
+.meter{display:flex;align-items:center;gap:10px;padding:0 6px 0 4px;margin-right:4px}
+.meter .bar{width:56px;height:4px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--ink)}
+.meter .bar i.full{background:var(--bad)}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--ok)}
+.avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--panel2);border:1px solid var(--line);flex:none}
+.who{display:flex;align-items:center;gap:8px;padding-left:4px}
+.who span.em{font-size:13px;color:var(--mut);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Connections popover */
+.scrim{position:fixed;inset:0;z-index:60}
+.pop{position:absolute;right:0;top:48px;z-index:61;width:340px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
+.pop .eyebrow{padding:10px 10px 6px;display:block}
+.pop .hint{padding:0 10px 10px;font-size:13px;color:var(--mut)}
+.pop-row{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px}
+.pop-row + .pop-row{border-top:1px solid var(--line);border-radius:0}
+.pop-row .info{flex:1;min-width:0}
+.pop-row b{display:block;font-size:14px}
+.pop-row small{display:block;font-size:12.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop-row.soon{opacity:.55}
+.ico{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:#fff;font:600 11px 'JetBrains Mono',monospace;flex:none;object-fit:cover}
+
+/* Layout */
+.wrap{max-width:960px;margin:0 auto;padding:56px 24px 96px}
+.intro .eyebrow{display:block;margin-bottom:14px}
+.intro h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.02;letter-spacing:-.04em;font-weight:700;max-width:640px}
+.intro h1 em{font-style:normal;color:var(--acc)}
+.sub{color:var(--mut);max-width:520px;margin:16px 0 30px;font-size:16px}
+
+/* Composer */
+.cmd{display:flex;align-items:center;gap:8px;background:var(--panel);border:1.5px solid var(--ink);border-radius:12px;padding:6px}
+.cmd input{flex:1;min-width:0;height:48px;border:0;background:transparent;color:var(--ink);padding:0 12px;outline:none}
+.cmd input::placeholder{color:var(--mut)}
+.cmd:focus-within{border-color:var(--acc)}
+.cmd .btn{height:48px;padding:0 24px;border-radius:8px}
+.opts{display:flex;flex-wrap:wrap;gap:24px 40px;margin-top:22px}
+.opt .eyebrow{display:block;margin-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{height:36px;padding:0 14px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--ink);font-weight:500;font-size:14px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--panel2)}
+.seg button.on{background:var(--ink);color:var(--on-ink)}
+
+/* Progress */
+.run{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:28px}
+.pct{font:600 72px/1 'JetBrains Mono',monospace;letter-spacing:-.05em}
+.pct small{font-size:28px;color:var(--mut);margin-left:4px}
+.track{height:4px;margin:22px 0 16px;background:var(--panel2);border-radius:2px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--acc);transition:width .4s ease}
+.step{font-weight:600}
+.note{font-size:13px;color:var(--mut);margin-top:4px}
+
+.err{border:1px solid var(--bad);border-left-width:4px;background:var(--panel);border-radius:10px;padding:20px 22px;line-height:1.6}
+.err b{color:var(--bad)}
+.err small{display:block;margin-top:8px;color:var(--mut);font-size:13px}
+.err .btn{margin-top:16px}
+
+/* Results */
+.sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:48px 0 4px;padding-bottom:14px;border-bottom:1.5px solid var(--ink)}
+.sec-head h2{font-size:24px;letter-spacing:-.03em;font-weight:700}
+.sec-head .eyebrow{display:block;margin-bottom:4px}
+.sec-head .tools{display:flex;gap:8px}
+.clip{display:grid;grid-template-columns:140px minmax(0,1fr);gap:22px;padding:22px 0;border-bottom:1px solid var(--line)}
+.vid{width:140px;aspect-ratio:9/16;object-fit:cover;background:#000;border-radius:8px;display:block}
+.clip-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+.clip-main p.cap{font-size:16px;font-weight:500;line-height:1.45}
+.clip-main p.why{font-size:14px;color:var(--mut)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 11px 'JetBrains Mono',monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ok);border:1px solid var(--ok);padding:3px 8px;border-radius:4px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:10px}
+.empty{padding:48px 0;color:var(--mut);border-bottom:1px solid var(--line)}
+
+/* Modals */
+.ov{position:fixed;inset:0;background:var(--overlay);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+.ov.login{z-index:300}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;width:100%;max-width:480px;max-height:92vh;overflow:auto;color:var(--ink)}
+.modal.center{text-align:center;max-width:380px;padding:32px 26px}
+.modal h3{font-size:20px;letter-spacing:-.02em;font-weight:700}
+.modal .lead{font-size:14px;color:var(--mut);margin:6px 0 0}
+.modal.center .lead{margin:8px 0 24px}
+.modal .lead b{color:var(--ink)}
+.mlabel{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 8px}
+.mlabel em{font-style:normal;font-size:12px;color:var(--acc)}
+.minput{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:10px 12px;resize:vertical}
+.minput:focus{outline:none;border-color:var(--acc)}
+.count{font:400 11px 'JetBrains Mono',monospace;color:var(--mut);margin-top:4px;text-align:right}
+.plats{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.plat{padding:10px 6px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--ink);font-weight:600;font-size:14px;cursor:pointer;line-height:1.3}
+.plat:last-child{border-right:0}
+.plat small{display:block;font-weight:400;font-size:11px;color:var(--mut)}
+.plat.on{background:var(--ink);color:var(--on-ink)}
+.plat.on small{color:var(--on-ink);opacity:.7}
+.msg{margin-top:12px;padding:10px 12px;border-left:3px solid var(--ok);background:var(--bg);font-size:13.5px}
+.msg.bad{border-left-color:var(--bad)}
+.msg a{color:var(--ink);font-weight:600}
+.mrow{display:flex;gap:8px;margin-top:22px}
+.mrow .btn{height:44px}
+.mrow .btn:first-child{flex:1}.mrow .btn:last-child{flex:2}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:46px;background:#fff;border:1px solid #d5d9e3;border-radius:8px;cursor:pointer;font-weight:600;color:#1a1a1a}
+.gbtn:disabled{opacity:.7;cursor:wait}
+
+@media(max-width:720px){
+  .meter .lbl,.btn .lbl,.who span.em{display:none}
+  .btn.conn{width:40px;padding:0}
+  .pop{position:fixed;left:12px;right:12px;top:66px;width:auto}
+}
+@media(max-width:560px){
+  .top-in{padding:0 14px;height:54px}
+  .wrap{padding:32px 16px 72px}
+  .sub{font-size:15px;margin-bottom:22px}
+  .cmd{flex-direction:column;align-items:stretch;padding:8px}
+  .cmd input{height:46px}
+  .cmd .btn{width:100%}
+  .opts{gap:18px}
+  .seg{display:flex;width:100%}
+  .seg button{flex:1;padding:0 6px}
+  .run{padding:20px}
+  .pct{font-size:56px}
+  .clip{grid-template-columns:104px minmax(0,1fr);gap:14px}
+  .vid{width:104px}
+  .clip-main p.cap{font-size:15px}
+  .sec-head{margin-top:36px}
+  .ov{align-items:flex-end;padding:0}
+  .modal{border-radius:14px 14px 0 0;max-width:none;padding:22px 18px 28px;max-height:94vh}
+  .modal.center{max-width:none}
+}
+`;
+
+/* ------------------------------------------------------------------ */
+/* Icons                                                               */
+/* ------------------------------------------------------------------ */
+const SunIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </svg>
+);
+const MoonIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+  </svg>
+);
+const LinkIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </svg>
+);
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+  </svg>
+);
+
+/* ------------------------------------------------------------------ */
+/* Login popup                                                         */
+/* ------------------------------------------------------------------ */
 function LoginPopup({ onClose }) {
   const [loading, setLoading] = useState(false);
   async function handleGoogleLogin() {
@@ -72,40 +225,49 @@ function LoginPopup({ onClose }) {
     try { await signInWithGoogle(); } catch (e) { console.error(e); setLoading(false); }
   }
   return (
-    <div style={S.loginOverlay}>
-      <div style={S.loginCard}>
-        <div style={{...S.logoIcon,margin:"0 auto 1.5rem",width:50,height:50,borderRadius:12,fontSize:22}}>✂</div>
-        <div style={S.loginTitle}>ClipAI mein Welcome!</div>
-        <div style={S.loginSub}>Viral clips banane ke liye Google se login karo.<br/><span style={{color:"#2b3cff"}}>Free mein 6 clips</span> store kar sakte ho!</div>
-        <button style={{...S.googleBtn,opacity:loading?0.7:1}} onClick={handleGoogleLogin} disabled={loading}>
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          {loading?"Loading...":"Google se Login Karo"}
+    <div className="ov login" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal center" role="dialog" aria-modal="true" aria-label="Sign in">
+        <span className="mark" style={{ width: 36, height: 36, borderRadius: 9, display: "inline-block", marginBottom: 16 }} />
+        <h3>Sign in to ClipAI</h3>
+        <p className="lead">
+          Use your Google account to create clips. You can store up to <b>{FREE_LIMIT} clips</b> for free.
+        </p>
+        <button className="gbtn" onClick={handleGoogleLogin} disabled={loading}>
+          <GoogleIcon />
+          {loading ? "Signing in..." : "Continue with Google"}
         </button>
-        <button style={{...S.resetBtn,marginTop:"1rem"}} onClick={onClose}>Baad mein</button>
+        <button className="btn full" style={{ marginTop: 10 }} onClick={onClose}>Not now</button>
       </div>
     </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Upload modal                                                        */
+/* ------------------------------------------------------------------ */
 function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose, session, onDone, onMark, meta, onMeta }) {
-  const _left = [ytConnected && !(clip.uploaded || []).includes("youtube") && "youtube", fbConnected && !(clip.uploaded || []).includes("facebook") && "facebook"].filter(Boolean);
+  const _left = [
+    ytConnected && !(clip.uploaded || []).includes("youtube") && "youtube",
+    fbConnected && !(clip.uploaded || []).includes("facebook") && "facebook",
+  ].filter(Boolean);
   const [platform, setPlatform] = useState(_left.length > 1 ? "all" : (_left[0] || "all"));
   const [results, setResults] = useState(null);
   const [doneP, setDoneP] = useState(clip.uploaded || []);
-  const [title, setTitle]           = useState(meta?.title ?? clip.title ?? clip.caption ?? "");
-  const [desc, setDesc]             = useState(meta?.desc ?? clip.description ?? "#shorts #viral #trending");
-  const [loading, setLoading]       = useState(false);
+  const [title, setTitle] = useState(meta?.title ?? clip.title ?? clip.caption ?? "");
+  const [desc, setDesc] = useState(meta?.desc ?? clip.description ?? "#shorts #viral #trending");
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [success, setSuccess]       = useState(null);
-  const [error, setError]           = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => { if (onMeta) onMeta(clip.db_id, { title, desc }); }, [title, desc]);
-  const canUp = platform === "all" ? ((ytConnected && !doneP.includes("youtube")) || (fbConnected && !doneP.includes("facebook"))) : platform === "youtube" ? (ytConnected && !doneP.includes("youtube")) : (fbConnected && !doneP.includes("facebook"));
+
+  const canUp =
+    platform === "all"
+      ? (ytConnected && !doneP.includes("youtube")) || (fbConnected && !doneP.includes("facebook"))
+      : platform === "youtube"
+        ? ytConnected && !doneP.includes("youtube")
+        : fbConnected && !doneP.includes("facebook");
 
   function getToken() { return session?.access_token || null; }
 
@@ -118,18 +280,16 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
       if (jobId) {
         res = await axios.post(`${API}/generate-title`,
           { job_id: jobId, clip_index: clipIndex },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+          { headers: { Authorization: `Bearer ${token}` } });
       } else {
         res = await axios.post(`${API}/generate-title-from-caption`,
           { caption: clip.caption || "", reason: clip.reason || "" },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+          { headers: { Authorization: `Bearer ${token}` } });
       }
       setTitle(res.data.title || "");
       setDesc(res.data.description || "");
     } catch {
-      setTitle("Check out this viral moment! 🔥");
+      setTitle("Check out this viral moment!");
       setDesc("#shorts #viral #trending");
     } finally { setGenerating(false); }
   }
@@ -140,25 +300,29 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
     if (!token) return;
     setLoading(true); setError(null);
     try {
-      const body = { b2_key: clip.b2_key, clip_db_id: clip.db_id,
-        title: title.trim(), description: desc.trim(), tags: ["shorts","viral","trending"] };
+      const body = {
+        b2_key: clip.b2_key, clip_db_id: clip.db_id,
+        title: title.trim(), description: desc.trim(), tags: ["shorts", "viral", "trending"],
+      };
       const hdr = { headers: { Authorization: `Bearer ${token}` } };
       if (platform === "all") {
-        const todo = [ytConnected && "youtube", fbConnected && "facebook"].filter(Boolean).filter(p => !doneP.includes(p));
-        if (!todo.length) { setError("Sab connected platform par upload ho chuka hai."); return; }
+        const todo = [ytConnected && "youtube", fbConnected && "facebook"].filter(Boolean).filter((p) => !doneP.includes(p));
+        if (!todo.length) { setError("This clip has already been uploaded to every connected platform."); return; }
         const res = await axios.post(`${API}/upload/all`, { ...body, platforms: todo }, hdr);
         const okP = Object.entries(res.data.results).filter(([, r]) => r.success).map(([k]) => k);
-        setResults(prev => ({ ...(prev || {}), ...res.data.results }));
-        setDoneP(prev => [...new Set([...prev, ...okP])]);
+        setResults((prev) => ({ ...(prev || {}), ...res.data.results }));
+        setDoneP((prev) => [...new Set([...prev, ...okP])]);
         if (res.data.deleted) { if (onDone) onDone(clip.db_id); }
         else if (okP.length && onMark) onMark(clip.db_id, okP);
         if (res.data.success) {
           setSuccess("all");
-        } else setError("Kuch platform par upload fail hua. Neeche dekho, phir dobara dabao (jo ho chuka wo dobara nahi jayega).");
+        } else {
+          setError("Upload failed on one or more platforms. See details below, then try again. Platforms that already succeeded will not be uploaded twice.");
+        }
       } else {
         const res = await axios.post(`${API}/upload/${platform}`, body, hdr);
         setSuccess(res.data.url);
-        setDoneP(prev => [...new Set([...prev, platform])]);
+        setDoneP((prev) => [...new Set([...prev, platform])]);
         if (res.data.deleted) { if (onDone) onDone(clip.db_id); }
         else if (onMark) onMark(clip.db_id, [platform]);
       }
@@ -166,118 +330,139 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
     finally { setLoading(false); }
   }
 
+  const platOptions = [
+    ["all", "All", ytConnected || fbConnected],
+    ["youtube", "YouTube", ytConnected && !doneP.includes("youtube")],
+    ["facebook", "Facebook", fbConnected && !doneP.includes("facebook")],
+  ];
+
   return (
-    <div style={S.overlay} onClick={(e)=>e.target===e.currentTarget&&onClose()}>
-      <div style={S.modal}>
-        <div style={S.modalTitle}><span>🚀</span> Upload Clip {clipIndex+1}</div>
-        <div style={{fontSize:11,color:"#4a5262",textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600,marginBottom:6}}>Platform</div>
-        <div style={{display:"flex",gap:8,marginBottom:16}}>
-          {[["all","All",ytConnected||fbConnected],["youtube","YouTube",ytConnected&&!doneP.includes("youtube")],["facebook","Facebook",fbConnected&&!doneP.includes("facebook")]].map(([k,n,ok]) => (
-            <button key={k} onClick={() => setPlatform(k)} style={{flex:1,padding:"11px 6px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,textAlign:"center",
-              border:platform===k?"2px solid #2b3cff":"1px solid #cfd5df",background:platform===k?"rgba(43,60,255,0.08)":"#fff",color:platform===k?"#2b3cff":"#0e1116"}}>
-              {n}{!ok&&<><br/><span style={{fontSize:10,fontWeight:500}}>{doneP.includes(k)?"✓ ho gaya":"Connect nahi hai"}</span></>}
-            </button>))}
+    <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={`Upload clip ${clipIndex + 1}`}>
+        <span className="eyebrow">Publish</span>
+        <h3>Upload clip {String(clipIndex + 1).padStart(2, "0")}</h3>
+        <p className="lead">Choose where to publish and review the details.</p>
+
+        <div className="mlabel"><span className="eyebrow">Platform</span></div>
+        <div className="plats">
+          {platOptions.map(([k, n, ok]) => (
+            <button key={k} className={"plat" + (platform === k ? " on" : "")} onClick={() => setPlatform(k)}>
+              {n}
+              {!ok && <small>{doneP.includes(k) ? "Uploaded" : "Not connected"}</small>}
+            </button>
+          ))}
         </div>
-        <div style={{display:"none"}}>
-          <button style={{flex:1,padding:"10px 6px",borderRadius:8,cursor:ytConnected?"pointer":"not-allowed",border:"1px solid #2b3cff",background:"rgba(43,60,255,0.1)",color:"#2b3cff",fontSize:11,fontWeight:600,textAlign:"center"}}>
-            ▶ YouTube{!ytConnected&&<><br/><span style={{fontSize:9,opacity:0.6}}>Connect karo</span></>}
-          </button>
-          <button style={{flex:1,padding:"10px 6px",borderRadius:8,cursor:"not-allowed",border:"1px solid #cfd5df",background:"transparent",color:"#4a5262",fontSize:11,fontWeight:600,textAlign:"center",opacity:0.5}}>
-            📸 Instagram<br/><span style={{fontSize:9}}>Coming Soon</span>
-          </button>
-          <button style={{flex:1,padding:"10px 6px",borderRadius:8,cursor:"not-allowed",border:"1px solid #cfd5df",background:"transparent",color:"#4a5262",fontSize:11,fontWeight:600,textAlign:"center",opacity:0.5}}>
-            👍 Facebook<br/><span style={{fontSize:9}}>Coming Soon</span>
-          </button>
+
+        <div className="mlabel">
+          <span className="eyebrow">Title</span>{generating && <em>Generating with AI...</em>}
         </div>
-        <label style={S.modalLabel}>Title {generating&&<span style={{color:"#2b3cff",fontSize:10}}>AI generate kar raha hai...</span>}</label>
-        <input style={S.modalInput} value={title} onChange={e=>setTitle(e.target.value)} maxLength={100} placeholder="Title likho"/>
-        <div style={{fontSize:10,color:"#4a5262",marginTop:3}}>{title.length}/100</div>
-        <label style={S.modalLabel}>Description</label>
-        <textarea style={{...S.modalInput,minHeight:70}} value={desc} onChange={e=>setDesc(e.target.value)} maxLength={500} placeholder="#shorts #viral"/>
-        <button onClick={generateTitle} disabled={generating} style={{...S.modalCancelBtn,marginTop:6,width:"100%",fontSize:12,opacity:generating?0.5:1}}>
-          {generating?"Generating...":"✨ AI se naya title banao (optional)"}
+        <input className="minput" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} placeholder="Enter a title" />
+        <div className="count">{title.length}/100</div>
+
+        <div className="mlabel"><span className="eyebrow">Description</span></div>
+        <textarea className="minput" style={{ minHeight: 84 }} value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={500} placeholder="#shorts #viral" />
+
+        <button className="btn full sm" style={{ marginTop: 10, height: 38 }} onClick={generateTitle} disabled={generating}>
+          {generating ? "Generating..." : "Generate a new title with AI (optional)"}
         </button>
-        {error&&<div style={{...S.successMsg,background:"rgba(180,35,24,0.1)",border:"1px solid rgba(180,35,24,0.3)",color:"#b42318"}}>❌ {error}</div>}
-        {results&&Object.entries(results).map(([k,r]) => (
-          <div key={k} style={{...S.successMsg,...(r.success?{}:{background:"rgba(180,35,24,0.1)",border:"1px solid rgba(180,35,24,0.3)",color:"#b42318"})}}>
-            {r.success?"✅":"❌"} {k==="youtube"?"YouTube":"Facebook"}: {r.success?<a href={r.url} target="_blank" rel="noreferrer" style={{color:"#0a7d3b"}}>Link kholo →</a>:r.error}
-          </div>))}
-        {success&&success!=="all"&&<div style={S.successMsg}>✅ Upload ho gaya! <a href={success} target="_blank" rel="noreferrer" style={{color:"#0a7d3b"}}>Link kholo →</a></div>}
-        {!success&&(
-          <div style={S.modalBtnRow}>
-            <button style={S.modalCancelBtn} onClick={onClose}>Cancel</button>
-            <button style={{...S.modalUploadBtn,opacity:loading||!title.trim()||!canUp?0.5:1}}
-              onClick={handleUpload} disabled={loading||!title.trim()||!canUp}>
-              {loading?"Uploading...":(platform==="all"?"🚀 Upload sab jagah":platform==="youtube"?"🚀 Upload to YouTube":"🚀 Upload to Facebook")}
+
+        {error && <div className="msg bad">{error}</div>}
+        {results && Object.entries(results).map(([k, r]) => (
+          <div key={k} className={"msg" + (r.success ? "" : " bad")}>
+            <b>{k === "youtube" ? "YouTube" : "Facebook"}:</b>{" "}
+            {r.success ? <>Uploaded. <a href={r.url} target="_blank" rel="noreferrer">Open link</a></> : r.error}
+          </div>
+        ))}
+        {success && success !== "all" && (
+          <div className="msg">Uploaded successfully. <a href={success} target="_blank" rel="noreferrer">Open link</a></div>
+        )}
+
+        {!success && (
+          <div className="mrow">
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn pri" onClick={handleUpload} disabled={loading || !title.trim() || !canUp}>
+              {loading ? "Uploading..." : platform === "all" ? "Upload to all platforms" : platform === "youtube" ? "Upload to YouTube" : "Upload to Facebook"}
             </button>
           </div>
         )}
-        {success&&<button style={{...S.resetBtn,marginTop:12}} onClick={onClose}>Close</button>}
+        {success && <button className="btn full" style={{ marginTop: 16 }} onClick={onClose}>Close</button>}
       </div>
     </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* App                                                                 */
+/* ------------------------------------------------------------------ */
 export default function App() {
-  const [url, setUrl]           = useState("");
+  const [url, setUrl] = useState("");
   const [language, setLanguage] = useState("hindi");
-  const [length, setLength]     = useState("30-60");
-  const [jobId, setJobId]       = useState(null);
-  const [job, setJob]           = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [length, setLength] = useState("30-60");
+  const [jobId, setJobId] = useState(null);
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [ytConnected, setYtConnected] = useState(false);
-  const [ytChannel, setYtChannel]     = useState(null);
+  const [ytChannel, setYtChannel] = useState(null);
   const [uploadModal, setUploadModal] = useState(null);
   const [clipMeta, setClipMeta] = useState({});
-  const [session, setSession]   = useState(null);
-  const [fb, setFb] = useState({connected:false,name:null,logo:null});
+  const [session, setSession] = useState(null);
+  const [fb, setFb] = useState({ connected: false, name: null, logo: null });
   const [showLogin, setShowLogin] = useState(false);
+  const [showConn, setShowConn] = useState(false);
   const [clipCount, setClipCount] = useState(0);
   const [storedClips, setStoredClips] = useState([]);
   const pollRef = useRef(null);
+
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "light" || saved === "dark") return saved;
+    } catch { }
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(THEME_KEY, theme); } catch { }
+    document.body.style.background = theme === "dark" ? "#141311" : "#f2efe9";
+  }, [theme]);
 
   function getToken(s) {
     const sess = s || session;
     return sess?.access_token || null;
   }
 
-  // ✅ Logout pe saare clips delete karo
+  // Delete all stored clips on logout
   async function handleLogout() {
     const token = getToken();
     if (token) {
       try {
-        await axios.delete(`${API}/my-clips/all`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch(e) {
+        await axios.delete(`${API}/my-clips/all`, { headers: { Authorization: `Bearer ${token}` } });
+      } catch (e) {
         console.error("[Cleanup] Clips delete failed:", e.message);
       }
     }
     await signOut();
   }
 
-  // ✅ YouTube connect — backend se auth URL fetch karo phir redirect karo
-async function connectYoutube() {
-  const token = getToken();
-  if (!token) { setShowLogin(true); return; }
-  try {
-    const res = await axios.get(`${API}/auth/youtube/url`, { headers: { Authorization: `Bearer ${token}` } });
-    window.location.href = res.data.url;
-  } catch (e) {
-    alert("YouTube connect failed: " + (e?.response?.data?.detail || e.message));
+  // YouTube connect: fetch the auth URL from the backend, then redirect
+  async function connectYoutube() {
+    const token = getToken();
+    if (!token) { setShowLogin(true); return; }
+    try {
+      const res = await axios.get(`${API}/auth/youtube/url`, { headers: { Authorization: `Bearer ${token}` } });
+      window.location.href = res.data.url;
+    } catch (e) {
+      alert("YouTube connection failed: " + (e?.response?.data?.detail || e.message));
+    }
   }
-}
 
-  // ✅ YouTube disconnect
   async function disconnectYoutube() {
     const token = getToken();
     try {
-      await axios.delete(`${API}/auth/youtube/disconnect`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.delete(`${API}/auth/youtube/disconnect`, { headers: { Authorization: `Bearer ${token}` } });
       setYtConnected(false);
       setYtChannel(null);
-    } catch(e) {
+    } catch (e) {
       alert("Disconnect failed: " + e.message);
     }
   }
@@ -292,21 +477,16 @@ async function connectYoutube() {
         setSession(sess); setShowLogin(false); checkYtStatus(sess); checkFbStatus(sess); fetchClipCount(sess);
       } else {
         setSession(null); setYtChannel(null); setYtConnected(false); setStoredClips([]); setClipCount(0);
+        setShowConn(false);
       }
     });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => { subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("yt_connected")) {
-      // ✅ Session se fresh status check karo
-      supabase.auth.getSession().then(({ data: { session: s } }) => {
-        if (s) checkYtStatus(s);
-      });
+      supabase.auth.getSession().then(({ data: { session: s } }) => { if (s) checkYtStatus(s); });
       window.history.replaceState({}, "", "/");
     }
     if (params.get("fb_connected")) {
@@ -314,12 +494,12 @@ async function connectYoutube() {
       window.history.replaceState({}, "", "/");
     }
     if (params.get("fb_error")) {
-      alert("Facebook connect nahi hua: " + params.get("fb_error"));
+      alert("Facebook connection failed: " + params.get("fb_error"));
       window.history.replaceState({}, "", "/");
     }
     if (params.get("yt_error")) {
       console.error("[YouTube Auth Error]", params.get("yt_error"));
-      alert("YouTube connect nahi hua: " + params.get("yt_error"));
+      alert("YouTube connection failed: " + params.get("yt_error"));
       window.history.replaceState({}, "", "/");
     }
   }, []);
@@ -329,7 +509,7 @@ async function connectYoutube() {
       const token = getToken(s); if (!token) return;
       const res = await axios.get(`${API}/auth/facebook/status`, { headers: { Authorization: `Bearer ${token}` } });
       setFb(res.data);
-    } catch {}
+    } catch { }
   }
   async function connectFacebook() {
     const token = getToken();
@@ -337,33 +517,29 @@ async function connectYoutube() {
     try {
       const res = await axios.get(`${API}/auth/facebook/url`, { headers: { Authorization: `Bearer ${token}` } });
       window.location.href = res.data.url;
-    } catch (e) { alert("Facebook connect failed: " + (e?.response?.data?.detail || e.message)); }
+    } catch (e) { alert("Facebook connection failed: " + (e?.response?.data?.detail || e.message)); }
   }
   async function disconnectFacebook() {
     try {
       await axios.delete(`${API}/auth/facebook/disconnect`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      setFb({ connected:false, name:null, logo:null });
+      setFb({ connected: false, name: null, logo: null });
     } catch (e) { alert("Disconnect failed: " + e.message); }
   }
   async function checkYtStatus(s) {
     try {
       const token = getToken(s);
       if (!token) return;
-      const res = await axios.get(`${API}/auth/youtube/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API}/auth/youtube/status`, { headers: { Authorization: `Bearer ${token}` } });
       setYtConnected(res.data.connected);
       if (res.data.connected) fetchYtChannel(s);
-    } catch {}
+    } catch { }
   }
 
   async function fetchYtChannel(s) {
     try {
       const token = getToken(s);
       if (!token) return;
-      const res = await axios.get(`${API}/auth/youtube/channel`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API}/auth/youtube/channel`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.data?.name) setYtChannel(res.data);
       else setYtChannel(null);
     } catch { setYtChannel(null); }
@@ -375,13 +551,15 @@ async function connectYoutube() {
       if (!token) return;
       const res = await axios.get(`${API}/my-clips`, { headers: { Authorization: `Bearer ${token}` } });
       setClipCount(res.data.count || 0);
-      const clips = (res.data.clips || []).map(c => ({
+      const clips = (res.data.clips || []).map((c) => ({
         url: c.url, b2_key: c.b2_key, db_id: c.id,
         caption: c.caption, reason: c.reason, uploaded: c.uploaded_to || [],
       }));
       setStoredClips(clips);
-      setJob(prev => (prev && prev.clips) ? { ...prev, clips: prev.clips.filter(c => clips.some(x => x.db_id === c.db_id)).map(c => ({ ...c, uploaded: (clips.find(x => x.db_id === c.db_id) || {}).uploaded || c.uploaded || [] })) } : prev);
-    } catch {}
+      setJob((prev) => (prev && prev.clips)
+        ? { ...prev, clips: prev.clips.filter((c) => clips.some((x) => x.db_id === c.db_id)).map((c) => ({ ...c, uploaded: (clips.find((x) => x.db_id === c.db_id) || {}).uploaded || c.uploaded || [] })) }
+        : prev);
+    } catch { }
   }
 
   useEffect(() => {
@@ -397,7 +575,7 @@ async function connectYoutube() {
           setLoading(false);
           if (res.data.status === "done") fetchClipCount(session);
         }
-      } catch(e) { console.error("[Poll error]", e?.message); }
+      } catch (e) { console.error("[Poll error]", e?.message); }
     }, 1500);
     return () => clearInterval(pollRef.current);
   }, [jobId, session]);
@@ -411,25 +589,24 @@ async function connectYoutube() {
     try {
       const res = await axios.post(`${API}/create-clips`,
         { youtube_url: url, language, clip_length: length },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+        { headers: { Authorization: `Bearer ${token}` } });
       setJobId(res.data.job_id);
-      setJob({ status:"queued", step:"Starting pipeline...", clips:[], progress:0 });
-    } catch(e) {
+      setJob({ status: "queued", step: "Starting pipeline...", clips: [], progress: 0 });
+    } catch (e) {
       setLoading(false);
-      setJob({ status:"error", step:"", error: e?.response?.data?.detail || e.message });
+      setJob({ status: "error", step: "", error: e?.response?.data?.detail || e.message });
     }
   }
 
   function markUploaded(id, plats) {
-    const add = c => c.db_id === id ? { ...c, uploaded: [...new Set([...(c.uploaded || []), ...plats])] } : c;
-    setJob(prev => prev ? ({ ...prev, clips: (prev.clips || []).map(add) }) : prev);
-    setStoredClips(prev => prev.map(add));
+    const add = (c) => c.db_id === id ? { ...c, uploaded: [...new Set([...(c.uploaded || []), ...plats])] } : c;
+    setJob((prev) => prev ? ({ ...prev, clips: (prev.clips || []).map(add) }) : prev);
+    setStoredClips((prev) => prev.map(add));
   }
   function clipGone(id) {
-    setJob(prev => prev ? ({ ...prev, clips: (prev.clips || []).filter(c => c.db_id !== id) }) : prev);
-    setStoredClips(prev => prev.filter(c => c.db_id !== id));
-    setClipCount(prev => Math.max(0, prev - 1));
+    setJob((prev) => prev ? ({ ...prev, clips: (prev.clips || []).filter((c) => c.db_id !== id) }) : prev);
+    setStoredClips((prev) => prev.filter((c) => c.db_id !== id));
+    setClipCount((prev) => Math.max(0, prev - 1));
     setTimeout(() => fetchClipCount(session), 800);
   }
   async function handleDeleteClip(clipDbId) {
@@ -437,10 +614,10 @@ async function connectYoutube() {
       const token = getToken();
       if (!token) return;
       await axios.delete(`${API}/clip/${clipDbId}`, { headers: { Authorization: `Bearer ${token}` } });
-      setJob(prev => prev ? ({ ...prev, clips: prev.clips.filter(c => c.db_id !== clipDbId) }) : prev);
-      setStoredClips(prev => prev.filter(c => c.db_id !== clipDbId));
-      setClipCount(prev => Math.max(0, prev - 1));
-    } catch(e) { alert("Delete failed: " + e.message); }
+      setJob((prev) => prev ? ({ ...prev, clips: prev.clips.filter((c) => c.db_id !== clipDbId) }) : prev);
+      setStoredClips((prev) => prev.filter((c) => c.db_id !== clipDbId));
+      setClipCount((prev) => Math.max(0, prev - 1));
+    } catch (e) { alert("Delete failed: " + e.message); }
   }
 
   function reset() {
@@ -449,182 +626,204 @@ async function connectYoutube() {
     fetchClipCount(session);
   }
 
-  const isDone    = job?.status === "done";
-  const isError   = job?.status === "error";
+  const isDone = job?.status === "done";
+  const isError = job?.status === "error";
   const isRunning = loading && !isDone && !isError;
-  const progress  = job?.progress ?? 0;
+  const progress = job?.progress ?? 0;
 
-  const LANGS = [["hindi","Hindi"],["hinglish","Hinglish"],["bengali","Bengali"],["english","English"]];
-  const LENS  = [["30-60","30–60 sec"],["60-90","60–90 sec"],["90-150","90–150 sec"]];
+  const LANGS = [["hindi", "Hindi"], ["hinglish", "Hinglish"], ["bengali", "Bengali"], ["english", "English"]];
+  const LENS = [["30-60", "30–60 sec"], ["60-90", "60–90 sec"], ["90-150", "90–150 sec"]];
   const avatar = session?.user?.user_metadata?.avatar_url;
+  const pad = (n) => String(n).padStart(2, "0");
 
-  const clipCard = (clip, i, fromJob) => (
-    <div className="card" key={clip.db_id || i}>
-      <video className="vid" controls preload="metadata" src={clip.url}/>
-      <div className="cbody">
-        <b>Clip {i+1}</b>
-        {clip.caption && <p>{clip.caption}</p>}
+  const clipRow = (clip, i, fromJob) => (
+    <article className="clip" key={clip.db_id || i}>
+      <video className="vid" controls preload="metadata" playsInline src={clip.url} />
+      <div className="clip-main">
+        <span className="eyebrow">Clip {pad(i + 1)}</span>
+        {clip.caption && <p className="cap">{clip.caption}</p>}
         {fromJob && clip.reason && <p className="why">{clip.reason}</p>}
-        {(clip.uploaded || []).length > 0 && <p className="why">✓ Upload ho chuka: {clip.uploaded.join(", ")}</p>}
+        {(clip.uploaded || []).length > 0 && (
+          <div className="chips">
+            {clip.uploaded.map((p) => <span className="chip" key={p}>Uploaded to {p}</span>)}
+          </div>
+        )}
         <div className="acts">
-          <button className="btn pri full" onClick={() => setUploadModal({clip, clipIndex:i, fromJob})}>Upload</button>
-          <a className="btn out" href={clip.url} download={`clipai_clip_${i+1}.mp4`}>Download</a>
-          <button className="btn del" onClick={() => handleDeleteClip(clip.db_id)}>Delete</button>
+          <button className="btn pri sm" onClick={() => setUploadModal({ clip, clipIndex: i, fromJob })}>Upload</button>
+          <a className="btn sm" href={clip.url} download={`clipai_clip_${i + 1}.mp4`}>Download</a>
+          <button className="btn del sm" onClick={() => handleDeleteClip(clip.db_id)}>Delete</button>
         </div>
       </div>
-    </div>
+    </article>
   );
 
   return (
-    <div className="cx">
-      <style>{`
-        .cx{--ink:#0e1116;--mut:#4a5262;--line:#cfd5df;--acc:#2b3cff;--bad:#b42318;--ok:#0a7d3b;display:grid;grid-template-columns:320px minmax(0,1fr);min-height:100vh;background:#eceff3;color:var(--ink);font-family:'Hanken Grotesk',sans-serif}
-        .cx *{box-sizing:border-box}
-        .side{position:sticky;top:0;height:100vh;overflow:auto;padding:28px 22px;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:26px}
-        .logo{display:flex;align-items:center;gap:10px;font:800 26px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}
-        .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--ink) 50%,var(--acc) 50%)}
-        .sec h4{font:700 14px 'Hanken Grotesk',sans-serif;color:var(--mut);margin-bottom:10px}
-        .me{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-        .me img,.me i{width:42px;height:42px;border-radius:50%;background:var(--line);flex:none}
-        .me span{font-size:14px;font-weight:600;word-break:break-all;line-height:1.3}
-        .row{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
-        .row b{display:block;font-size:16px}.row small{font-size:13px;color:var(--mut)}
-        .ico{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;flex:none;object-fit:cover}
-        .soon{opacity:.6}
-        .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:700 15px 'Hanken Grotesk',sans-serif;cursor:pointer;text-decoration:none}
-        .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
-        .btn.del{background:#fef3f2;border-color:#f1a9a1;color:var(--bad)}
-        .btn.full{width:100%}.btn:disabled{opacity:.45;cursor:not-allowed}
-        .btn:hover:not(:disabled){filter:brightness(.95)}
-        .cx button:focus-visible,.cx a:focus-visible,.url:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
-        .bar{height:10px;background:#e4e8ee;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
-        .bar i{display:block;height:100%;background:var(--acc)}
-        .main{padding:48px 5vw 80px;max-width:1000px;width:100%}
-        .main h1{font:800 clamp(2.1rem,4.6vw,3.5rem)/1.02 'Bricolage Grotesque',sans-serif;letter-spacing:-.035em;max-width:680px}
-        .sub{font-size:18px;line-height:1.6;color:var(--mut);max-width:560px;margin:16px 0 32px}
-        .panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px;margin-bottom:24px}
-        .panel label{display:block;font-weight:700;font-size:15px;margin:22px 0 10px}.panel label:first-child{margin-top:0}
-        .url{width:100%;height:60px;font:500 17px 'Hanken Grotesk',sans-serif;color:var(--ink);border:2px solid var(--ink);border-radius:12px;padding:0 18px;background:#fff}
-        .seg{display:flex;flex-wrap:wrap;gap:8px}
-        .seg button{height:44px;padding:0 18px;border:1px solid var(--line);background:#fff;border-radius:10px;font:600 15px 'Hanken Grotesk',sans-serif;color:var(--ink);cursor:pointer}
-        .seg button.on{background:var(--ink);border-color:var(--ink);color:#fff}
-        .go{height:56px;margin-top:28px;font-size:17px}
-        .pct{font:800 64px/1 'Bricolage Grotesque',sans-serif;letter-spacing:-.04em}
-        .tl{height:18px;margin:18px 0 12px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 14px),#e4e8ee}
-        .tl i{display:block;height:100%;background:var(--acc);transition:width .4s}
-        .err{background:#fef3f2;border:1px solid #f1a9a1;color:var(--bad);border-radius:14px;padding:22px;line-height:1.6;margin-bottom:24px}
-        .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 18px}
-        .head h2{font:800 28px 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}
-        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px;margin-bottom:28px}
-        .card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
-        .vid{width:100%;aspect-ratio:9/16;object-fit:cover;background:#000;display:block}
-        .cbody{padding:14px}.cbody b{font-size:16px}
-        .cbody p{font-size:14px;line-height:1.5;margin:6px 0 0}.cbody .why{color:var(--mut);font-size:13px}
-        .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.acts .full{grid-column:1/-1}
-        @media(max-width:860px){.cx{grid-template-columns:1fr}.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.main{padding-top:28px}}
-      `}</style>
+    <div className="cx" data-theme={theme}>
+      <style>{CSS}</style>
 
       {showLogin && <LoginPopup onClose={() => setShowLogin(false)} />}
       {uploadModal && (
-        <UploadModal clip={uploadModal.clip} clipIndex={uploadModal.clipIndex}
+        <UploadModal
+          clip={uploadModal.clip} clipIndex={uploadModal.clipIndex}
           jobId={uploadModal.fromJob ? jobId : null} ytConnected={ytConnected} fbConnected={fb.connected}
           session={session} onDone={clipGone} onMark={markUploaded} meta={clipMeta[uploadModal.clip.db_id]}
-          onMeta={(id, m) => setClipMeta(p => ({ ...p, [id]: m }))} onClose={() => setUploadModal(null)} />
+          onMeta={(id, m) => setClipMeta((p) => ({ ...p, [id]: m }))} onClose={() => setUploadModal(null)}
+        />
       )}
 
-      <aside className="side">
-        <div className="logo"><span className="mark"/>ClipAI</div>
+      <header className="top">
+        <div className="top-in">
+          <div className="logo"><span className="mark" />ClipAI</div>
 
-        <div className="sec">
-          <h4>Account</h4>
-          {session ? (<>
-            <div className="me">{avatar ? <img src={avatar} alt=""/> : <i/>}<span>{session.user.email}</span></div>
-            <button className="btn full" onClick={handleLogout}>Log out</button>
-          </>) : (<>
-            <p style={{fontSize:14,color:"var(--mut)",lineHeight:1.5,marginBottom:12}}>Login karo, phir 6 clips tak free me save kar sakte ho.</p>
-            <button className="btn pri full" onClick={() => setShowLogin(true)}>Log in with Google</button>
-          </>)}
-        </div>
+          <div className="top-r">
+            {session && (
+              <div className="meter" title="Saved clips">
+                <span className="eyebrow lbl">Saved</span>
+                <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: clipCount >= FREE_LIMIT ? "var(--bad)" : "var(--ink)" }}>{clipCount}/{FREE_LIMIT}</span>
+                <span className="bar"><i className={clipCount >= FREE_LIMIT ? "full" : ""} style={{ width: `${Math.min(100, (clipCount / FREE_LIMIT) * 100)}%` }} /></span>
+              </div>
+            )}
 
-        <div className="sec">
-          <h4>Connections</h4>
-          <div className="row">
-            {ytChannel?.logo ? <img className="ico" src={ytChannel.logo} alt=""/> : <span className="ico" style={{background:"#d92d20"}}>YT</span>}
-            <div style={{minWidth:0}}>
-              <b>YouTube</b>
-              <small>{ytConnected ? (ytChannel?.name || "Connected") : "Not connected"}</small>
-            </div>
-          </div>
-          {session && (
-            <button className={"btn full " + (ytConnected ? "out" : "pri")}
-              onClick={() => ytConnected ? disconnectYoutube() : connectYoutube()}>
-              {ytConnected ? "Disconnect YouTube" : "Connect YouTube"}
+            <button className="btn conn" onClick={() => setShowConn((v) => !v)} aria-expanded={showConn} aria-label="Connections">
+              <LinkIcon />
+              <span className="lbl">Connections</span>
+              <span className="dots lbl"><i className={ytConnected ? "on" : ""} /><i className={fb.connected ? "on" : ""} /></span>
             </button>
-          )}
-          <div className="row soon" style={{marginTop:10}}><span className="ico" style={{background:"#8a3ffc"}}>IG</span><div><b>Instagram</b><small>Coming soon</small></div></div>
-          <div className="row" style={{marginTop:10}}>
-            {fb.logo ? <img className="ico" src={fb.logo} alt=""/> : <span className="ico" style={{background:"#1570ef"}}>FB</span>}
-            <div style={{minWidth:0}}><b>Facebook</b><small>{fb.connected ? (fb.name || "Connected") : "Not connected"}</small></div>
+
+            <button
+              className="btn sq"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            </button>
+
+            {session ? (
+              <div className="who">
+                {avatar ? <img className="avatar" src={avatar} alt="" /> : <span className="avatar" />}
+                <span className="em">{session.user.email}</span>
+                <button className="btn" onClick={handleLogout}>Log out</button>
+              </div>
+            ) : (
+              <button className="btn dark" onClick={() => setShowLogin(true)}>Log in</button>
+            )}
+
+            {showConn && (
+              <>
+                <div className="scrim" onClick={() => setShowConn(false)} />
+                <div className="pop" role="dialog" aria-label="Connections">
+                  <span className="eyebrow">Connected accounts</span>
+                  {!session && <p className="hint">Log in to connect your channels.</p>}
+
+                  <div className="pop-row">
+                    {ytChannel?.logo ? <img className="ico" src={ytChannel.logo} alt="" /> : <span className="ico" style={{ background: "#c4302b" }}>YT</span>}
+                    <div className="info"><b>YouTube</b><small>{ytConnected ? (ytChannel?.name || "Connected") : "Not connected"}</small></div>
+                    {session && (
+                      <button className={"btn sm" + (ytConnected ? "" : " pri")} onClick={() => (ytConnected ? disconnectYoutube() : connectYoutube())}>
+                        {ytConnected ? "Disconnect" : "Connect"}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pop-row">
+                    {fb.logo ? <img className="ico" src={fb.logo} alt="" /> : <span className="ico" style={{ background: "#1877f2" }}>FB</span>}
+                    <div className="info"><b>Facebook</b><small>{fb.connected ? (fb.name || "Connected") : "Not connected"}</small></div>
+                    {session && (
+                      <button className={"btn sm" + (fb.connected ? "" : " pri")} onClick={() => (fb.connected ? disconnectFacebook() : connectFacebook())}>
+                        {fb.connected ? "Disconnect" : "Connect"}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pop-row soon">
+                    <span className="ico" style={{ background: "#7a4bd6" }}>IG</span>
+                    <div className="info"><b>Instagram</b><small>Coming soon</small></div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          {session && <button className={"btn full " + (fb.connected ? "out" : "pri")} onClick={() => fb.connected ? disconnectFacebook() : connectFacebook()}>{fb.connected ? "Disconnect Facebook" : "Connect Facebook"}</button>}
         </div>
+      </header>
 
-        {session && (
-          <div className="sec">
-            <h4 style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>Saved clips
-              <button className="btn" style={{height:32,padding:"0 12px",fontSize:13}} onClick={() => fetchClipCount(session)}>Refresh</button>
-            </h4>
-            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:15,marginBottom:8}}>
-              <span>{clipCount} of 6 used</span><span style={{color:clipCount>=6?"var(--bad)":"var(--mut)"}}>{6-clipCount} free</span>
-            </div>
-            <div className="bar"><i style={{width:`${Math.min(100,clipCount/6*100)}%`}}/></div>
-          </div>
-        )}
-      </aside>
-
-      <main className="main">
-        <h1>Turn one long video into Shorts that are ready to post.</h1>
-        <p className="sub">Paste a YouTube link. ClipAI picks the best moments, cuts them to 9:16, adds synced captions and uploads to your channel.</p>
+      <div className="wrap">
+        <section className="intro">
+          <span className="eyebrow">Video to Shorts</span>
+          <h1>Long video in. <em>Shorts</em> out.</h1>
+          <p className="sub">
+            Paste a YouTube link. ClipAI selects the strongest moments, crops them to 9:16, adds synced captions, and publishes to your channels.
+          </p>
+        </section>
 
         {!isRunning && !isDone && !isError && (
-          <div className="panel">
-            <label htmlFor="u">YouTube video link</label>
-            <input id="u" className="url" placeholder="https://youtube.com/watch?v=..." value={url} onChange={e => setUrl(e.target.value)}/>
-            <label>Caption language</label>
-            <div className="seg">{LANGS.map(([v,t]) => <button key={v} className={language===v?"on":""} onClick={() => setLanguage(v)}>{t}</button>)}</div>
-            <label>Clip length</label>
-            <div className="seg">{LENS.map(([v,t]) => <button key={v} className={length===v?"on":""} onClick={() => setLength(v)}>{t}</button>)}</div>
-            <button className="btn pri full go" onClick={handleSubmit} disabled={!url}>Generate clips</button>
-          </div>
+          <section>
+            <div className="cmd">
+              <input
+                id="u" inputMode="url" aria-label="YouTube video link"
+                placeholder="Paste a YouTube link, e.g. youtube.com/watch?v=..."
+                value={url} onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              />
+              <button className="btn pri" onClick={handleSubmit} disabled={!url}>Generate clips</button>
+            </div>
+            <div className="opts">
+              <div className="opt">
+                <span className="eyebrow">Caption language</span>
+                <div className="seg">
+                  {LANGS.map(([v, t]) => <button key={v} className={language === v ? "on" : ""} onClick={() => setLanguage(v)}>{t}</button>)}
+                </div>
+              </div>
+              <div className="opt">
+                <span className="eyebrow">Clip length</span>
+                <div className="seg">
+                  {LENS.map(([v, t]) => <button key={v} className={length === v ? "on" : ""} onClick={() => setLength(v)}>{t}</button>)}
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {isRunning && job && (
-          <div className="panel">
-            <div className="pct">{progress}%</div>
-            <div className="tl"><i style={{width:`${progress}%`}}/></div>
-            <p style={{fontSize:17,fontWeight:600}}>{job.step}</p>
-            <p style={{fontSize:14,color:"var(--mut)",marginTop:6}}>Isme 2–5 minute lag sakte hain. Page band mat karna.</p>
-          </div>
+          <section className="run">
+            <span className="eyebrow">Processing</span>
+            <div className="pct" style={{ marginTop: 10 }}>{progress}<small>%</small></div>
+            <div className="track"><i style={{ width: `${progress}%` }} /></div>
+            <p className="step">{job.step}</p>
+            <p className="note">This can take 2–5 minutes. Please keep this page open.</p>
+          </section>
         )}
 
         {isError && (
-          <div className="err">
-            <b>Kuch gadbad ho gayi.</b><br/>{job?.error}<br/>
-            <small>Check karo: YouTube link sahi hai? ffmpeg installed hai? Backend chal raha hai?</small><br/><br/>
+          <section className="err">
+            <b>Something went wrong.</b><br />{job?.error}
+            <small>Please check that the YouTube link is valid, ffmpeg is installed, and the backend is running.</small>
             <button className="btn" onClick={reset}>Try again</button>
-          </div>
+          </section>
         )}
 
-        {isDone && job?.clips?.length > 0 && (<>
-          <div className="head"><h2>{job.clips.length} clips ready</h2><button className="btn" onClick={reset}>New video</button></div>
-          <div className="grid">{job.clips.map((c, i) => clipCard(c, i, true))}</div>
-        </>)}
+        {isDone && job?.clips?.length > 0 && (
+          <section>
+            <div className="sec-head">
+              <div><span className="eyebrow">Result</span><h2>{job.clips.length} clips ready</h2></div>
+              <div className="tools"><button className="btn" onClick={reset}>New video</button></div>
+            </div>
+            {job.clips.map((c, i) => clipRow(c, i, true))}
+          </section>
+        )}
 
-        {!isRunning && !isDone && session && storedClips.length > 0 && (<>
-          <div className="head"><h2>Your saved clips ({storedClips.length}/6)</h2><button className="btn" onClick={() => fetchClipCount(session)}>Refresh</button></div>
-          <div className="grid">{storedClips.map((c, i) => clipCard(c, i, false))}</div>
-        </>)}
-      </main>
+        {!isRunning && !isDone && session && (
+          <section>
+            <div className="sec-head">
+              <div><span className="eyebrow">Library</span><h2>Saved clips ({storedClips.length}/{FREE_LIMIT})</h2></div>
+              <div className="tools"><button className="btn" onClick={() => fetchClipCount(session)}>Refresh</button></div>
+            </div>
+            {storedClips.length > 0
+              ? storedClips.map((c, i) => clipRow(c, i, false))
+              : <div className="empty">No saved clips yet. Paste a link above to create your first ones.</div>}
+          </section>
+        )}
+      </div>
     </div>
   );
 }
