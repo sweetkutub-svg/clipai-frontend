@@ -266,8 +266,13 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
     platform === "all"
       ? (ytConnected && !doneP.includes("youtube")) || (fbConnected && !doneP.includes("facebook"))
       : platform === "youtube"
+<<<<<<< HEAD
         ? ytConnected && !doneP.includes("youtube")
         : fbConnected && !doneP.includes("facebook");
+=======
+      ? ytConnected && !doneP.includes("youtube")
+      : fbConnected && !doneP.includes("facebook");
+>>>>>>> c7dc724865b96624d2bbbe25bf601b362dbe80f5
 
   function getToken() { return session?.access_token || null; }
 
@@ -417,12 +422,20 @@ export default function App() {
     try {
       const saved = localStorage.getItem(THEME_KEY);
       if (saved === "light" || saved === "dark") return saved;
+<<<<<<< HEAD
     } catch { }
+=======
+    } catch {}
+>>>>>>> c7dc724865b96624d2bbbe25bf601b362dbe80f5
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
   useEffect(() => {
+<<<<<<< HEAD
     try { localStorage.setItem(THEME_KEY, theme); } catch { }
+=======
+    try { localStorage.setItem(THEME_KEY, theme); } catch {}
+>>>>>>> c7dc724865b96624d2bbbe25bf601b362dbe80f5
     document.body.style.background = theme === "dark" ? "#141311" : "#f2efe9";
   }, [theme]);
 
@@ -559,7 +572,11 @@ export default function App() {
       setJob((prev) => (prev && prev.clips)
         ? { ...prev, clips: prev.clips.filter((c) => clips.some((x) => x.db_id === c.db_id)).map((c) => ({ ...c, uploaded: (clips.find((x) => x.db_id === c.db_id) || {}).uploaded || c.uploaded || [] })) }
         : prev);
+<<<<<<< HEAD
     } catch { }
+=======
+    } catch {}
+>>>>>>> c7dc724865b96624d2bbbe25bf601b362dbe80f5
   }
 
   useEffect(() => {
