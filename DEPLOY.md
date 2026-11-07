@@ -1,0 +1,3 @@
+Vercel → Project → Settings → Environment Variables:
+  REACT_APP_API_URL = https://<your-backend-url>
+Then redeploy.
