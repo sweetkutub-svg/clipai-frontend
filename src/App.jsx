@@ -5,6 +5,7 @@ import { supabase, signInWithGoogle, signOut } from "./supabase";
 const API = (process.env.REACT_APP_API_URL || "http://localhost:8000").replace(/\/$/, "");
 const FREE_LIMIT = 6;
 const THEME_KEY = "clipai-theme";
+const clipNo = (clip, i) => { const m = (clip?.b2_key || "").match(/clip_(\d+)\.mp4$/); return String(m ? m[1] : i + 1).padStart(2, "0"); };
 
 /* ------------------------------------------------------------------ */
 /* Styles                                                              */
@@ -277,7 +278,7 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
       const token = getToken();
       if (!token) return;
       let res;
-      if (jobId) {
+      if (false) {
         res = await axios.post(`${API}/generate-title`,
           { job_id: jobId, clip_index: clipIndex },
           { headers: { Authorization: `Bearer ${token}` } });
@@ -338,9 +339,9 @@ function UploadModal({ clip, clipIndex, jobId, ytConnected, fbConnected, onClose
 
   return (
     <div className="ov" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={`Upload clip ${clipIndex + 1}`}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={`Upload clip ${clipNo(clip, clipIndex)}`}>
         <span className="eyebrow">Publish</span>
-        <h3>Upload clip {String(clipIndex + 1).padStart(2, "0")}</h3>
+        <h3>Upload clip {clipNo(clip, clipIndex)}</h3>
         <p className="lead">Choose where to publish and review the details.</p>
 
         <div className="mlabel"><span className="eyebrow">Platform</span></div>
@@ -640,7 +641,7 @@ export default function App() {
     <article className="clip" key={clip.db_id || i}>
       <video className="vid" controls preload="metadata" playsInline src={clip.url} />
       <div className="clip-main">
-        <span className="eyebrow">Clip {pad(i + 1)}</span>
+        <span className="eyebrow">Clip {clipNo(clip, i)}</span>
         {clip.caption && <p className="cap">{clip.caption}</p>}
         {fromJob && clip.reason && <p className="why">{clip.reason}</p>}
         {(clip.uploaded || []).length > 0 && (
@@ -650,7 +651,7 @@ export default function App() {
         )}
         <div className="acts">
           <button className="btn pri sm" onClick={() => setUploadModal({ clip, clipIndex: i, fromJob })}>Upload</button>
-          <a className="btn sm" href={clip.url} download={`clipai_clip_${i + 1}.mp4`}>Download</a>
+          <a className="btn sm" href={clip.url} download={`clipai_clip_${clipNo(clip, i)}.mp4`}>Download</a>
           <button className="btn del sm" onClick={() => handleDeleteClip(clip.db_id)}>Delete</button>
         </div>
       </div>
